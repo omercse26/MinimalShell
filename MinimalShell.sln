@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.26403.7
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Shell", "Shell\Shell.vcxproj", "{90B7D66F-6321-4F9B-AC07-2E2DAA78C795}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MinimalShell", "Shell\Shell.vcxproj", "{90B7D66F-6321-4F9B-AC07-2E2DAA78C795}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
