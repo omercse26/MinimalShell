@@ -105,6 +105,7 @@ public:
 			int processID = jobManager.getProcessID(jobID);
 			if (processID == -1) {
 				std::cout << "JobID " << jobID << " is invalid" << std::endl;
+				return;
 			}
 			switch (builtinCommand) {
 			case 0:
