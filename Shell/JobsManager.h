@@ -9,7 +9,7 @@ struct Job {
 	pid_t processID;
 	int jobID;
 	bool isStopped;
-	Job() = default;
+	Job() = delete;
 	Job(pid_t pid, int jid, bool stopped) : processID(pid), jobID(jid), isStopped(stopped)
 	{}
 };
