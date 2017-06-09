@@ -3,13 +3,14 @@
 #include <utility>
 #include <iostream>
 #include <list>
+#include <sys/wait.h>
 
 struct Job {
-	int processID;
+	pid_t processID;
 	int jobID;
 	bool isStopped;
 	Job() = default;
-	Job(int pid, int jid, bool stopped) : processID(pid), jobID(jid), isStopped(stopped) 
+	Job(pid_t pid, int jid, bool stopped) : processID(pid), jobID(jid), isStopped(stopped)
 	{}
 };
 
@@ -27,7 +28,7 @@ private:
 		return jobID;
 	}
 public:
-	void addJob(int processID, bool isStopped)
+	void addJob(pid_t processID, bool isStopped)
 	{
 		int jobID = getJobID();
 		Job job(processID, jobID, isStopped);
@@ -37,8 +38,10 @@ public:
 
 	void modifyJob(int jobID, bool isStopped)
 	{
-		Job& job = jobMap[jobID];
-		job.isStopped = isStopped;
+		auto it = jobMap.find(jobID);
+		if (it != jobMap.end()) {
+			it->second.isStopped = isStopped;
+		}
 	}
 
 	void removeJob(int jobID)
@@ -47,10 +50,13 @@ public:
 		recycleJobID.push_back(jobID);
 	}
 
-	int getProcessID(int jobID)
+	pid_t getProcessID(int jobID)
 	{
-		Job& job = jobMap[jobID];
-		return job.processID;
+		auto it = jobMap.find(jobID);
+		if (it != jobMap.end()) {
+			return it->second.processID;
+		}
+		return -1;
 	}
 
 	void printJobs()
@@ -58,6 +64,38 @@ public:
 		for (const auto& job : jobMap) {
 			std::cout << "JobID: " << job.first << " PID: " << job.second.processID;
 			std::cout << " Stopped: " << job.second.isStopped << std::endl;
+		}
+	}
+
+	void checkJobStatus()
+	{
+		int status;
+		for (const auto& job : jobMap) {
+			auto jobID = job.first;
+			auto processID = job.second.processID;
+
+			if (processID != waitpid(processID, &status, WNOHANG | WUNTRACED | WCONTINUED)){
+				continue;
+			}
+
+			if (WIFEXITED(status))	{
+				std::cout << "Job " << jobID << " exited with status: " << WEXITSTATUS(status) << std::endl;
+				removeJob(jobID);
+			}
+			else if (WIFSTOPPED(status))  {
+				modifyJob(jobID, true);
+			}
+			else if (WIFSIGNALED(status))  {
+				auto sig = WTERMSIG(status);
+				if (sig == SIGKILL || sig == SIGTERM || sig == SIGQUIT || sig == SIGINT) {					
+					std::cout << "Job " << jobID << " terminated by signal: " 
+							  << sig << std::endl;
+					removeJob(jobID);
+				}
+			}
+			else if (WIFCONTINUED(status))  {
+				modifyJob(jobID, false);
+			}
 		}
 	}
 };
