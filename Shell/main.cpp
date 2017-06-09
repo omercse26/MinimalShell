@@ -137,6 +137,7 @@ public:
 				getFileName(subCmds, argv, backgroundProcess);
 				execve(argv[0], argv, env);
 				std::cout << "Error Executing the command " << argv[0] << std::endl;
+				delete[] argv;
 				exit(-1);
 			}
 			else
