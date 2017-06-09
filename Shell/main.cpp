@@ -62,27 +62,24 @@ class MinimalShell
 		waitpid(processID, &status, WUNTRACED);
 
 		if (WIFEXITED(status)) {
-			std::cout << "Process " << processID << " with status: " << WEXITSTATUS(status) << std::endl;
+			std::cout << "Process " << processID << " exited with status: " << WEXITSTATUS(status) << std::endl;
 		}
 		else if (WIFSTOPPED(status)) {
-			jobManager.addJob(processID, 1);
+			jobManager.addJob(processID, true);
 		}
 		else if (WIFSIGNALED(status)){
 			std::cout << "Process " << processID << " terminated by signal: " << WTERMSIG(status) << std::endl;
 		}
 	}
 
-	void getFileName(std::vector<std::string>& subCmds, char** argv, bool bg)
+	void fillExecveArgs(std::vector<std::string>& subCmds, char** argv, bool bg)
 	{
 		int i = 0;
 		for (auto& subcmd : subCmds) {
 			argv[i++] = &subcmd[0];
 		}
 
-		if (bg)
-			argv[i - 1] = NULL;
-		else
-			argv[i] = NULL;
+		argv[bg? (i - 1): i] = NULL;
 	}
 
 public:
@@ -128,20 +125,21 @@ public:
 			}
 		}
 		else {
+			// Execute the command in a child process.
 			bool backgroundProcess = (subCmds.back() == "&");
 			pid_t childPID = fork();
-			if (childPID == 0)
-			{
+			if (childPID == 0)	{
+				// In Child Process
 				char** argv = new char*[subCmds.size()+1];
 				char* env[] = { NULL };
-				getFileName(subCmds, argv, backgroundProcess);
+				fillExecveArgs(subCmds, argv, backgroundProcess);
 				execve(argv[0], argv, env);
 				std::cout << "Error Executing the command " << argv[0] << std::endl;
 				delete[] argv;
 				exit(-1);
 			}
-			else
-			{
+			else  {
+				// In Parent process.
 				if (!backgroundProcess) {
 					waitForProcess(childPID);
 				}
