@@ -2,13 +2,16 @@
 #include <vector>
 #include <cctype>
 #include <cstdlib>
+#include <memory>
+
 #include <signal.h>
 #include <unistd.h>
 #include "JobsManager.h"
+#include "Util.h"
 
 class MinimalShell
 {
-	JobManager jobManager;
+	std::unique_ptr<IJobManager> jobManager;
 
 	int isBuiltInCommand(const std::string& command)
 	{
@@ -28,21 +31,7 @@ class MinimalShell
 
 	std::vector<std::string> splitCmd(const std::string& command)
 	{
-		std::vector<std::string> subCmds;
-		size_t i = 0;
-
-		while (i < command.size()) {
-			while (i < command.size() && std::isspace(command[i])) { ++i; }
-			auto j = i;
-			std::string temp;
-			while (i < command.size() && !std::isspace(command[i])) {
-				temp.append(1, command[i++]);
-			}
-
-			if (i > j) {
-				subCmds.push_back(temp);
-			}
-		}
+		std::vector<std::string> subCmds = Util::splitStringToVector(command);
 
 		// single out the ampersand.
 		std::string last = subCmds.back();
@@ -65,7 +54,7 @@ class MinimalShell
 			std::cout << "Process " << processID << " exited with status: " << WEXITSTATUS(status) << std::endl;
 		}
 		else if (WIFSTOPPED(status)) {
-			jobManager.addJob(processID, true);
+			jobManager->addJob(processID, true);
 		}
 		else if (WIFSIGNALED(status)){
 			std::cout << "Process " << processID << " terminated by signal: " << WTERMSIG(status) << std::endl;
@@ -83,14 +72,16 @@ class MinimalShell
 	}
 
 public:
+	MinimalShell(std::unique_ptr<IJobManager> jobManager) : jobManager(std::move(jobManager)){}
+
 	void checkJobStatus()
 	{
-		jobManager.checkJobStatus();
+		jobManager->checkJobStatus();
 	}
 	void executeCommand(const std::string& command)
 	{
 		if (command == "jobs") {
-			jobManager.printJobs();
+			jobManager->printJobs();
 			return;
 		}
 
@@ -102,7 +93,7 @@ public:
 
 		if (builtinCommand != -1) {
 			int jobID = atoi(subCmds[1].c_str());
-			int processID = jobManager.getProcessID(jobID);
+			int processID = jobManager->getProcessID(jobID);
 			if (processID == -1) {
 				std::cout << "JobID " << jobID << " is invalid" << std::endl;
 				return;
@@ -110,13 +101,13 @@ public:
 			switch (builtinCommand) {
 			case 0:
 				std::cout << "fg" << std::endl;
-				jobManager.removeJob(jobID);
+				jobManager->removeJob(jobID);
 				kill(processID, SIGCONT);
 				waitForProcess(processID);
 				break;
 			case 1:
 				std::cout << "bg" << std::endl;
-				jobManager.modifyJob(jobID, false);
+				jobManager->modifyJob(jobID, false);
 				kill(processID, SIGCONT);
 				break;
 			case 2:
@@ -145,7 +136,7 @@ public:
 					waitForProcess(childPID);
 				}
 				else {
-					jobManager.addJob(childPID, false);
+					jobManager->addJob(childPID, false);
 				}
 			}
 		}
@@ -155,7 +146,7 @@ public:
 int main()
 {
 	std::string command;
-	MinimalShell shell;
+	MinimalShell shell(std::unique_ptr<JobManager>(new JobManager));
 	while (true) {
 		std::cout << "$:" << std::flush;
 		std::getline(std::cin, command);

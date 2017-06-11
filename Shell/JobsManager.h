@@ -4,6 +4,7 @@
 #include <iostream>
 #include <list>
 #include <sys/wait.h>
+#include "IJobManager.h"
 
 struct Job {
 	pid_t processID;
@@ -14,7 +15,7 @@ struct Job {
 	{}
 };
 
-class JobManager {
+class JobManager : public IJobManager{
 	std::map<int, Job> jobMap;
 	std::list<int> recycleJobID;
 	int nextJobID = -1;

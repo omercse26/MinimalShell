@@ -65,7 +65,9 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="IJobManager.h" />
     <ClInclude Include="JobsManager.h" />
+    <ClInclude Include="Util.h" />
   </ItemGroup>
   <ItemDefinitionGroup />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
