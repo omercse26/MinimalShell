@@ -75,26 +75,28 @@ public:
 			auto jobID = job.first;
 			auto processID = job.second.processID;
 
-			if (processID != waitpid(processID, &status, WNOHANG | WUNTRACED | WCONTINUED)){
+			ProcessStatus processStatus = processManager->waitForProcess(processID, WNOHANG | WUNTRACED | WCONTINUED);
+
+			if (processID != processStatus.processID){
 				continue;
 			}
 
-			if (WIFEXITED(status))	{
-				std::cout << "Job " << jobID << " exited with status: " << WEXITSTATUS(status) << std::endl;
+			if (processStatus.processState == PROCESS_STATE::PROCESS_EXITED) {
+				std::cout << "Process " << processID << " exited with status: " << processStatus.processStatus << std::endl;
 				removeJob(jobID);
 			}
-			else if (WIFSTOPPED(status))  {
+			else if (processStatus.processState == PROCESS_STATE::PROCESS_STOPPED) {
 				modifyJob(jobID, true);
 			}
-			else if (WIFSIGNALED(status))  {
-				auto sig = WTERMSIG(status);
-				if (sig == SIGKILL || sig == SIGTERM || sig == SIGQUIT || sig == SIGINT) {					
-					std::cout << "Job " << jobID << " terminated by signal: " 
-							  << sig << std::endl;
+			else if (processStatus.processState == PROCESS_STATE::PROCESS_SIGNALED) {
+				auto sig = processStatus.processStatus;
+				if (sig == SIGKILL || sig == SIGTERM || sig == SIGQUIT || sig == SIGINT) {
+					std::cout << "Job " << jobID << " terminated by signal: "
+						<< sig << std::endl;
 					removeJob(jobID);
 				}
 			}
-			else if (WIFCONTINUED(status))  {
+			else if (processStatus.processState == PROCESS_STATE::PROCESS_CONTINUED) {
 				modifyJob(jobID, false);
 			}
 		}

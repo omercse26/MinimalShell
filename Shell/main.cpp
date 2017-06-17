@@ -7,11 +7,13 @@
 #include <signal.h>
 #include <unistd.h>
 #include "JobsManager.h"
+#include "LinuxProcessManager.h"
 #include "Util.h"
 
 class MinimalShell
 {
 	std::unique_ptr<IJobManager> jobManager;
+	std::unique_ptr<IProcessManager> processManager;
 
 	int isBuiltInCommand(const std::string& command)
 	{
@@ -47,32 +49,26 @@ class MinimalShell
 
 	void waitForProcess(int processID)
 	{
-		int status;
-		waitpid(processID, &status, WUNTRACED);
+		ProcessStatus processStatus = processManager->waitForProcess(processID, WUNTRACED);
 
-		if (WIFEXITED(status)) {
-			std::cout << "Process " << processID << " exited with status: " << WEXITSTATUS(status) << std::endl;
+		if (processStatus.processState == PROCESS_STATE::PROCESS_EXITED) {
+			std::cout << "Process " << processID << " exited with status: " << processStatus.processStatus << std::endl;
 		}
-		else if (WIFSTOPPED(status)) {
+		else if (processStatus.processState == PROCESS_STATE::PROCESS_STOPPED) {
 			jobManager->addJob(processID, true);
 		}
-		else if (WIFSIGNALED(status)){
-			std::cout << "Process " << processID << " terminated by signal: " << WTERMSIG(status) << std::endl;
+		else if (processStatus.processState == PROCESS_STATE::PROCESS_SIGNALED){
+			std::cout << "Process " << processID << " terminated by signal: " << processStatus.processStatus << std::endl;
 		}
-	}
-
-	void fillExecveArgs(std::vector<std::string>& subCmds, char** argv, bool bg)
-	{
-		int i = 0;
-		for (auto& subcmd : subCmds) {
-			argv[i++] = &subcmd[0];
-		}
-
-		argv[bg? (i - 1): i] = NULL;
 	}
 
 public:
-	MinimalShell(std::unique_ptr<IJobManager> jobManager) : jobManager(std::move(jobManager)){}
+	MinimalShell(std::unique_ptr<IJobManager> jobManager,
+		         std::unique_ptr<IProcessManager> processMgr) : 
+		jobManager(std::move(jobManager)), processManager(std::move(processMgr))
+	{
+		this->jobManager->setProcessManager(processManager.get());
+	}
 
 	void checkJobStatus()
 	{
@@ -100,44 +96,30 @@ public:
 			}
 			switch (builtinCommand) {
 			case 0:
-				std::cout << "fg" << std::endl;
 				jobManager->removeJob(jobID);
-				kill(processID, SIGCONT);
+				processManager->sendSignalToProcess(processID, SIGNAL::SIG_FG);
 				waitForProcess(processID);
 				break;
 			case 1:
-				std::cout << "bg" << std::endl;
 				jobManager->modifyJob(jobID, false);
-				kill(processID, SIGCONT);
+				processManager->sendSignalToProcess(processID, SIGNAL::SIG_BG);
 				break;
 			case 2:
-				std::cout << "kill" << std::endl;
-				kill(processID, SIGINT);
+				processManager->sendSignalToProcess(processID, SIGNAL::SIG_INT);
 				break;
 			}
 		}
 		else {
 			// Execute the command in a child process.
-			bool backgroundProcess = (subCmds.back() == "&");
-			pid_t childPID = fork();
-			if (childPID == 0)	{
-				// In Child Process
-				char** argv = new char*[subCmds.size()+1];
-				char* env[] = { NULL };
-				fillExecveArgs(subCmds, argv, backgroundProcess);
-				execve(argv[0], argv, env);
-				std::cout << "Error Executing the command " << argv[0] << std::endl;
-				delete[] argv;
-				exit(-1);
+			ChildProcessInfo childProcessInfo;
+			processManager->executeCmdInChildProcess(subCmds, childProcessInfo);
+			
+			// In Parent process.
+			if (!childProcessInfo.isBackGround) {
+				waitForProcess(childProcessInfo.childPID);
 			}
-			else  {
-				// In Parent process.
-				if (!backgroundProcess) {
-					waitForProcess(childPID);
-				}
-				else {
-					jobManager->addJob(childPID, false);
-				}
+			else {
+				jobManager->addJob(childProcessInfo.childPID, false);
 			}
 		}
 	}
@@ -146,7 +128,8 @@ public:
 int main()
 {
 	std::string command;
-	MinimalShell shell(std::unique_ptr<JobManager>(new JobManager));
+	MinimalShell shell(std::unique_ptr<IJobManager>(new JobManager), 
+					   std::unique_ptr<IProcessManager>(new LinuxProcessManager));
 	while (true) {
 		std::cout << "$:" << std::flush;
 		std::getline(std::cin, command);
